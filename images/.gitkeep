@@ -1,0 +1,9 @@
+# Placeholder for workflow diagrams
+# 
+# Create the following images:
+# - controlled_spender.png - Workflow diagram showing owner → agent → spend flow
+# - streamcap.png - Workflow diagram showing stream creation → accumulation → withdrawal
+# - commitrelease.png - Workflow diagram showing commit → wait → reveal flow
+#
+# Use tools like Mermaid, draw.io, or similar to create these diagrams.
+
