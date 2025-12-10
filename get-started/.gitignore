@@ -1,0 +1,28 @@
+# Build artifacts
+build/
+*.bin
+*.abi
+
+# Deployment info
+deployments.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
