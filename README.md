@@ -1,14 +1,17 @@
 # Vyper Agent Workflows
 
-Three Vyper smart contracts demonstrating safe, agent-controlled wallet automation patterns for AI agents and automated systems.
+Six Vyper smart contracts demonstrating safe, agent-controlled wallet automation patterns for AI agents and automated systems.
 
 ## Overview
 
-This repository contains three production-ready Vyper contracts designed for AI agent interactions:
+This repository contains six production-ready Vyper contracts designed for AI agent interactions:
 
 1. **ControlledSpender.vy** - Per-agent allowance with expiry (safe wallet automation)
 2. **StreamCap.vy** - Simple token-like streaming with rate + cap
 3. **CommitRelease.vy** - Commitment/reveal pattern for agent-triggered actions
+4. **TimeLock.vy** - Time-locked vault for delayed withdrawals
+5. **RateLimiter.vy** - Rate limiting for agent actions
+6. **Escrow.vy** - Simple escrow for conditional fund release
 
 Each contract is intentionally small, auditable, and comment-rich. They follow Vyper best practices with explicit checks, no hidden modifiers, and clear state management.
 
@@ -19,7 +22,10 @@ vyper-agent-workflows/
 ├── contracts/
 │   ├── ControlledSpender.vy
 │   ├── StreamCap.vy
-│   └── CommitRelease.vy
+│   ├── CommitRelease.vy
+│   ├── TimeLock.vy
+│   ├── RateLimiter.vy
+│   └── Escrow.vy
 ├── scripts/
 │   ├── agent_demo.py
 │   ├── compile.py
@@ -32,7 +38,10 @@ vyper-agent-workflows/
 └── images/
     ├── controlled_spender.png
     ├── streamcap.png
-    └── commitrelease.png
+    ├── commitrelease.png
+    ├── timelock.png
+    ├── ratelimiter.png
+    └── escrow.png
 ```
 
 ## Quick Start
@@ -90,7 +99,15 @@ python3 -m vyper -f bytecode contracts/StreamCap.vy > build/StreamCap.bin
 
 python3 -m vyper -f abi contracts/CommitRelease.vy > build/CommitRelease.abi
 python3 -m vyper -f bytecode contracts/CommitRelease.vy > build/CommitRelease.bin
-```
+
+python3 -m vyper -f abi contracts/TimeLock.vy > build/TimeLock.abi
+python3 -m vyper -f bytecode contracts/TimeLock.vy > build/TimeLock.bin
+
+python3 -m vyper -f abi contracts/RateLimiter.vy > build/RateLimiter.abi
+python3 -m vyper -f bytecode contracts/RateLimiter.vy > build/RateLimiter.bin
+
+python3 -m vyper -f abi contracts/Escrow.vy > build/Escrow.abi
+python3 -m vyper -f bytecode contracts/Escrow.vy > build/Escrow.bin
 
 **Note:** If `vyper` is in your PATH, you can use `vyper` instead of `python3 -m vyper`.
 
@@ -120,7 +137,7 @@ python3 scripts/deploy.py
 
 The script will:
 1. Load pre-compiled artifacts from `build/` directory (or compile on-the-fly if missing)
-2. Deploy all three contracts
+2. Deploy all six contracts
 3. Save deployment addresses to `deployments.json`
 
 **Manual deployment with web3.py:**
@@ -252,6 +269,87 @@ key = Web3.keccak(secret + Web3.to_bytes(hexstr=to) + amount.to_bytes(32, 'big')
 contract.functions.reveal(secret, to, amount).transact(...)
 ```
 
+### 4. TimeLock.vy
+
+**Purpose:** Owner deposits funds that can only be withdrawn after a lock period expires. Provides a safety delay for agent-controlled funds.
+
+**Key Features:**
+- Time-based lock mechanism
+- Multiple locks per contract (lock IDs)
+- Owner-controlled withdrawals
+- Prevents premature fund access
+
+**Workflow:**
+1. Owner calls `create_lock(unlockTime)` with ETH deposit
+2. Lock is created with specified unlock timestamp
+3. Agent or owner checks `is_unlocked(id)` to verify lock status
+4. After unlock time, owner calls `withdraw(id, to)` to release funds
+5. Funds are transferred to specified recipient
+
+**Use Case:** Agent-controlled funds that need a safety delay. Owner can lock funds for a period, ensuring they cannot be withdrawn until the lock expires. Useful for time-gated releases or safety mechanisms.
+
+**Security Notes:**
+- Only owner can create locks and withdraw
+- Unlock time must be in the future when creating lock
+- Each lock can only be withdrawn once
+- State updated before external call (checks-effects-interactions)
+
+### 5. RateLimiter.vy
+
+**Purpose:** Owner sets rate limits per agent (max amount per time window). Prevents agents from exceeding spending limits within a time period.
+
+**Key Features:**
+- Per-agent rate limiting
+- Configurable time windows
+- Automatic window reset
+- Tracks spending within current window
+
+**Workflow:**
+1. Owner calls `set_rate_limit(agent, maxAmount, windowSeconds)` to configure limits
+2. Agent checks `remaining(agent)` to see available allowance
+3. Agent calls `execute_action(amount)` when performing actions
+4. Contract validates rate limit and updates spent amount
+5. Window automatically resets when time period expires
+
+**Use Case:** Prevent agents from exceeding spending limits within a time period. Useful for controlling agent behavior and preventing rapid successive actions that could drain funds.
+
+**Math:**
+```
+remaining = maxAmount - spentInWindow (if window not expired)
+remaining = maxAmount (if window expired)
+```
+
+**Security Notes:**
+- Only owner can set rate limits
+- Window automatically resets when expired
+- Amount cannot exceed remaining allowance
+- State updated atomically before logging
+
+### 6. Escrow.vy
+
+**Purpose:** Owner deposits funds that can be released to a recipient by an agent when certain conditions are met. Agent acts as arbiter/executor.
+
+**Key Features:**
+- Conditional fund release
+- Depositor can cancel and refund
+- Agent-controlled release
+- Multiple escrows per contract
+
+**Workflow:**
+1. Depositor calls `create_escrow(recipient)` with ETH deposit
+2. Escrow is created with specified recipient
+3. Agent (owner) monitors off-chain conditions
+4. When conditions met, agent calls `release(id)` to send funds to recipient
+5. Alternatively, depositor can call `cancel(id)` to refund
+
+**Use Case:** Conditional fund release where an agent monitors off-chain conditions and releases funds when criteria are met. Useful for payment upon delivery, milestone-based releases, or arbitration scenarios.
+
+**Security Notes:**
+- Only owner (agent) can release escrow
+- Only depositor can cancel escrow
+- Each escrow can only be released or cancelled once
+- State updated before external call (checks-effects-interactions)
+
 ## Agent Demo Script
 
 The `agent_demo.py` script demonstrates how an AI agent interacts with each contract:
@@ -321,6 +419,9 @@ The script includes:
    - For ControlledSpender: Send ETH to contract address
    - For StreamCap: Send ETH when creating stream
    - For CommitRelease: Deposit when committing
+   - For TimeLock: Send ETH when creating lock
+   - For RateLimiter: No funding needed (rate limiting only)
+   - For Escrow: Send ETH when creating escrow
 
 4. **Configure contracts:**
    ```python
@@ -376,6 +477,9 @@ brownie test
 - **ControlledSpender:** Ensure contract has sufficient balance before agent spends
 - **StreamCap:** Monitor stream caps to prevent overflow issues
 - **CommitRelease:** Use strong random secrets for commitments
+- **TimeLock:** Verify unlock times are set correctly before creating locks
+- **RateLimiter:** Monitor window sizes to ensure appropriate rate limits
+- **Escrow:** Ensure clear off-chain conditions for release to prevent disputes
 
 ## Workflow Diagrams
 
@@ -384,6 +488,9 @@ The `images/` directory should contain workflow diagrams for each contract:
 - `controlled_spender.png` - Shows owner → agent → spend flow
 - `streamcap.png` - Shows stream creation → accumulation → withdrawal
 - `commitrelease.png` - Shows commit → wait → reveal flow
+- `timelock.png` - Shows lock creation → wait → withdrawal flow
+- `ratelimiter.png` - Shows rate limit setting → action execution → window reset
+- `escrow.png` - Shows escrow creation → release/cancel flow
 
 *(Note: Create these diagrams using your preferred tool - Mermaid, draw.io, or similar)*
 
